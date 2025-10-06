@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/plain-draggable@2.5.14/plain-draggable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -169,7 +170,7 @@
         <button id="delete-node-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2" title="Ta bort nod">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         </button>
-        <button id="export-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center space-x-2" title="Exportera till text">
+        <button id="export-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center space-x-2" title="Ladda ner som bild">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
         <button id="clear-all-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center space-x-2" title="Rensa allt">
@@ -186,20 +187,6 @@
         <button id="save-editor-btn" class="bg-green-500 text-white rounded p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
     </div>
 
-    <!-- Export Modal -->
-    <div id="export-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
-            <h3 class="text-xl font-bold mb-4">Exportera som text</h3>
-            <p class="mb-4 text-sm text-gray-600">Kopiera texten nedan och klistra in den i ett Google Dokument, en presentation eller ett annat textprogram.</p>
-            <textarea id="export-textarea" readonly class="w-full h-64 p-2 border border-gray-300 rounded-md font-mono text-sm bg-gray-50"></textarea>
-            <div class="mt-4 flex justify-end space-x-2">
-                <button id="copy-export-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Kopiera</button>
-                <button id="close-export-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors">Stäng</button>
-            </div>
-        </div>
-    </div>
-
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('mindmap-container');
@@ -208,10 +195,6 @@
             const clearAllBtn = document.getElementById('clear-all-btn');
             const colorPicker = document.getElementById('color-picker');
             const exportBtn = document.getElementById('export-btn');
-            const exportModal = document.getElementById('export-modal');
-            const exportTextarea = document.getElementById('export-textarea');
-            const copyExportBtn = document.getElementById('copy-export-btn');
-            const closeExportBtn = document.getElementById('close-export-btn');
             const shapeButtons = document.querySelectorAll('.shape-btn');
             const textEditor = document.getElementById('text-editor');
             const textColorPicker = document.getElementById('text-color-picker');
@@ -251,7 +234,6 @@
                 
                 let contentEl;
                 if (shape === 'drop') {
-                    // Special structure for drop to handle border-radius and transform correctly
                     const wrapper = document.createElement('div');
                     wrapper.className = 'node-content-wrapper';
                     contentEl = document.createElement('div');
@@ -314,7 +296,7 @@
                 if (lines[lineId]) lines[lineId].remove();
                 
                 const line = new LeaderLine(startEl, endEl, {
-                    color: 'var(--line-color)',
+                    color: '#718096', // Hardcoded color to fix export issue
                     size: 2,
                     path: 'fluid',
                     endPlug: 'behind'
@@ -333,7 +315,6 @@
                 const rotation = node.rotation || 0;
                 node.el.style.transform = `rotate(${rotation}deg)`;
 
-                // Counter-rotate text to keep it readable
                 if (node.shape === 'drop') {
                     node.contentEl.style.transform = `rotate(${45 - rotation}deg)`;
                 } else {
@@ -445,13 +426,11 @@
                 editorTarget = contentEl;
                 contentEl.contentEditable = true;
 
-                // Make the editor visible first to get its dimensions
                 textEditor.classList.remove('hidden'); 
                 positionEditor(nodes[id].el);
 
                 contentEl.focus();
 
-                // Select all text inside the contentEl
                 const selection = window.getSelection();
                 const range = document.createRange();
                 range.selectNodeContents(contentEl);
@@ -498,18 +477,14 @@
                 const spaceBelow = window.innerHeight - rect.bottom;
 
                 let top;
-                // If not enough space above, and more space below, position it below
                 if (spaceAbove < (editorHeight + 10) && spaceBelow > spaceAbove) {
                     top = rect.bottom + 10;
                 } else {
-                    // Default position is above
                     top = rect.top - editorHeight - 10;
                 }
 
-                // Center it horizontally with the node
                 let left = rect.left + (rect.width / 2) - (editorWidth / 2);
 
-                // Ensure it doesn't go off-screen
                 if (left < 5) left = 5;
                 if (left + editorWidth > window.innerWidth) left = window.innerWidth - editorWidth - 5;
                 if (top < 5) top = 5;
@@ -590,7 +565,6 @@
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (!selectedNodeId) return;
-                    // Re-create node to handle structural changes (like for 'drop')
                     const oldNode = nodes[selectedNodeId];
                     const newShape = btn.dataset.shape;
                     const newNodeData = {
@@ -600,7 +574,6 @@
                     deleteNode(oldNode.id);
                     const newNode = createNode(newNodeData.id, newNodeData.htmlContent, newNodeData.x, newNodeData.y, newNodeData.parentId, newNodeData.bgColor, newShape, newNodeData.rotation);
                     
-                    // Re-attach children
                     oldNode.childrenIds.forEach(childId => {
                          if(nodes[childId]) {
                             nodes[childId].parentId = newNode.id;
@@ -625,41 +598,67 @@
             });
 
             // --- Export Logic ---
-            function generateTextExport() {
-                 let output = 'Min Tankekarta\n============\n\n';
-                const rootNodes = Object.values(nodes).filter(n => !n.parentId);
+            async function exportAsImage() {
+                const prevSelectedId = selectedNodeId;
+                selectNode(null); 
 
-                function traverse(nodeId, depth) {
-                    const node = nodes[nodeId];
-                    if (!node) return;
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = node.htmlContent.replace(/<a /g, '<span ').replace(/<\/a>/g, '</span>'); // remove links for clean text
-                    const text = (tempDiv.textContent || tempDiv.innerText || "").trim();
-                    output += `${'  '.repeat(depth)}- ${text}\n`;
-                    node.childrenIds.forEach(childId => traverse(childId, depth + 1));
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                try {
+                    const canvas = await html2canvas(container, {
+                        backgroundColor: '#f0f4f8', // Hardcoded color
+                        logging: false,
+                        useCORS: true,
+                         onclone: (clonedDoc) => {
+                            const clonedControls = clonedDoc.getElementById('controls');
+                            if (clonedControls) clonedControls.style.display = 'none';
+
+                            // Replace CSS variables with computed values for html2canvas
+                            const allClonedNodes = clonedDoc.querySelectorAll('.node');
+                            allClonedNodes.forEach(clonedNode => {
+                                const originalNode = document.getElementById(clonedNode.id);
+                                if (originalNode) {
+                                    const computedStyle = window.getComputedStyle(originalNode);
+                                    clonedNode.style.backgroundColor = computedStyle.backgroundColor;
+                                    clonedNode.style.borderColor = computedStyle.borderColor;
+                                    
+                                    if (clonedNode.classList.contains('shape-drop')) {
+                                        const clonedWrapper = clonedNode.querySelector('.node-content-wrapper');
+                                        const originalWrapper = originalNode.querySelector('.node-content-wrapper');
+                                        if (clonedWrapper && originalWrapper) {
+                                            const computedWrapperStyle = window.getComputedStyle(originalWrapper);
+                                            clonedWrapper.style.backgroundColor = computedWrapperStyle.backgroundColor;
+                                            clonedWrapper.style.borderColor = computedWrapperStyle.borderColor;
+                                        }
+                                    }
+
+                                    const clonedHandle = clonedNode.querySelector('.rotation-handle');
+                                    const originalHandle = originalNode.querySelector('.rotation-handle');
+                                    if(clonedHandle && originalHandle) {
+                                        const computedHandleStyle = window.getComputedStyle(originalHandle);
+                                        clonedHandle.style.backgroundColor = computedHandleStyle.backgroundColor;
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL('image/jpeg');
+                    link.download = 'tankekarta.jpg';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Oops, something went wrong!', error);
+                    alert('Kunde inte exportera bilden.');
+                } finally {
+                    if (prevSelectedId) {
+                        selectNode(prevSelectedId);
+                    }
                 }
-
-                rootNodes.forEach(rootNode => {
-                    traverse(rootNode.id, 0);
-                    output += '\n';
-                });
-                return output;
             }
-            exportBtn.addEventListener('click', () => { 
-                exportTextarea.value = generateTextExport();
-                exportModal.classList.remove('hidden');
-                exportModal.classList.add('flex');
-            });
-            closeExportBtn.addEventListener('click', () => { 
-                exportModal.classList.add('hidden');
-                exportModal.classList.remove('flex');
-             });
-            copyExportBtn.addEventListener('click', () => { 
-                exportTextarea.select();
-                document.execCommand('copy');
-                copyExportBtn.textContent = 'Kopierad!';
-                setTimeout(() => { copyExportBtn.textContent = 'Kopiera'; }, 1500);
-            });
+            exportBtn.addEventListener('click', exportAsImage);
+
 
             // --- State Management ---
             function saveState() {
@@ -700,3 +699,4 @@
     </script>
 </body>
 </html>
+
